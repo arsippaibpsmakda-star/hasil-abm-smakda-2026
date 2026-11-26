@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { 
+      background-color: #f4f7f6; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    }
+    .header-box { 
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+      color: white; 
+      padding: 2rem 1rem; 
+      border-radius: 0 0 20px 20px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .card-hasil { 
+      border: none; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    }
+    .iframe-preview { 
+      width: 100%; 
+      height: 550px; 
+      border: 1px solid #ddd; 
+      border-radius: 8px; 
+      display: none; 
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-box text-center mb-4">
+    <h4 class="fw-bold mb-1">Portal Hasil Asesmen Bakat Minat (ABM)</h4>
+    <p class="mb-0 opacity-75">SMK Negeri 2 Purbalingga</p>
+  </div>
+
+  <div class="container pb-5" style="max-width: 720px;">
+    <div class="card card-hasil p-4 mb-4">
+      <label for="inputCari" class="form-label fw-semibold">Cari Hasil ABM Anda</label>
+      <div class="input-group input-group-lg">
+        <input type="text" id="inputCari" class="form-control" placeholder="Ketik Nama Lengkap..." onkeypress="if(event.key==='Enter') cariData()">
+        <button class="btn btn-primary px-4" onclick="cariData()">Cari</button>
+      </div>
+      <div class="form-text mt-2">Masukkan Nama Lengkap Anda untuk melihat dan mengunduh Hasil ABM PDF.</div>
+    </div>
+
+    <div id="loading" class="text-center my-4" style="display:none;">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2 text-muted">Mencari data hasil ABM...</p>
+    </div>
+
+    <div id="areaHasil"></div>
+  </div>
+
+  <script>
+    function cariData() {
+      const keyword = document.getElementById('inputCari').value;
+      if (keyword.trim().length < 3) {
+        alert('Masukkan Nama Lengkap Anda.');
+        return;
+      }
+
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('areaHasil').innerHTML = '';
+
+      google.script.run
+        .withSuccessHandler(tampilkanHasil)
+        .withFailureHandler(function(err) {
+          document.getElementById('loading').style.display = 'none';
+          alert('Terjadi kesalahan: ' + err.message);
+        })
+        .cariHasilSiswa(keyword);
+    }
+
+    function tampilkanHasil(data) {
+      document.getElementById('loading').style.display = 'none';
+      const container = document.getElementById('areaHasil');
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning text-center">Data tidak ditemukan. Pastikan ejaan nama lengkap sudah benar.</div>';
+        return;
+      }
+
+      data.forEach((item, index) => {
+        const html = `
+          <div class="card card-hasil p-3 mb-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+              <div>
+                <span class="badge bg-info text-dark mb-1">${item.kelas}</span>
+                <h6 class="fw-bold mb-0">${item.nama}</h6>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="togglePreview('frame-${index}', '${item.linkLihat}')">Lihat PDF</button>
+                <a href="${item.linkDownload}" target="_blank" class="btn btn-success btn-sm">Unduh PDF</a>
+              </div>
+            </div>
+            <iframe id="frame-${index}" class="iframe-preview mt-3"></iframe>
+          </div>
+        `;
+        container.innerHTML += html;
+      });
+    }
+
+    function togglePreview(frameId, url) {
+      const frame = document.getElementById(frameId);
+      if (frame.style.display === 'none' || frame.style.display === '') {
+        frame.src = url;
+        frame.style.display = 'block';
+      } else {
+        frame.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
