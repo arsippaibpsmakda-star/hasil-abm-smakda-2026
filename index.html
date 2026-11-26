@@ -4,12 +4,64 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Hasil ABM - SMK Negeri 2 Purbalingga</title>
+  <!-- Mempercepat koneksi awal ke server unduhan & pratinjau Google Drive -->
+  <link rel="preconnect" href="https://drive.google.com">
+  <link rel="preconnect" href="https://drive.usercontent.google.com">
+  <link rel="dns-prefetch" href="https://drive.usercontent.google.com">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .header-box { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; border-radius: 0 0 20px 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .card-hasil { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-    .iframe-preview { width: 100%; height: 550px; border: 1px solid #ddd; border-radius: 8px; display: none; }
+    body { 
+      background-color: #f4f7f6; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    }
+    .header-box { 
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+      color: white; 
+      padding: 2rem 1rem; 
+      border-radius: 0 0 20px 20px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+    }
+    .card-hasil { 
+      border: none; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    }
+    .preview-wrapper {
+      display: none;
+      margin-top: 15px;
+      border-top: 1px solid #eee;
+      padding-top: 12px;
+    }
+    .iframe-container {
+      position: relative;
+      width: 100%;
+      height: 620px;
+      background-color: #e9ecef;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #ced4da;
+    }
+    .iframe-preview { 
+      width: 100%; 
+      height: 100%; 
+      border: none; 
+      position: relative;
+      z-index: 2;
+    }
+    .iframe-loader {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      text-align: center;
+      color: #6c757d;
+    }
+    @media (max-width: 600px) {
+      .iframe-container {
+        height: 480px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -19,7 +71,7 @@
     <p class="mb-0 opacity-75">SMK Negeri 2 Purbalingga</p>
   </div>
 
-  <div class="container pb-5" style="max-width: 720px;">
+  <div class="container pb-5" style="max-width: 780px;">
     <div class="card card-hasil p-4 mb-4">
       <label for="inputCari" class="form-label fw-semibold">Cari Hasil ABM Anda</label>
       <div class="input-group input-group-lg">
@@ -37,15 +89,13 @@
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRppRz_aJizJooLHc4NzIkP-QYq5PFgjefLG8M_1PRu8aauZGbMdUQ4iI4Yvlnh6FYWGSJscFTmcrfK/pub?gid=0&single=true&output=csv";
     let databaseSiswa = [];
 
-    // Memuat seluruh database 1 kali saat halaman dibuka (kurang dari 1 detik)
     async function muatDatabase() {
       try {
         const res = await fetch(CSV_URL);
         const text = await res.text();
-        const baris = text.split(/\r?\n/).slice(1); // Lewati baris header
+        const baris = text.split(/\r?\n/).slice(1);
 
         databaseSiswa = baris.map(row => {
-          // Memecah kolom CSV dengan aman
           const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
           if (cols.length < 4 || !cols[1]) return null;
 
@@ -55,16 +105,27 @@
             .replace(/_/g, ' ')
             .trim();
 
+          // Ekstrak File ID Google Drive untuk membuat link pratinjau & unduh langsung yang lebih cepat
+          let linkPreview = cols[2];
+          let linkDirectDownload = cols[3];
+          const matchId = linkPreview.match(/\/d\/([a-zA-Z0-9_-]+)/) || linkDirectDownload.match(/id=([a-zA-Z0-9_-]+)/);
+          
+          if (matchId) {
+            const fileId = matchId[1];
+            linkPreview = `https://drive.google.com/file/d/${fileId}/preview`;
+            // Jalur langsung usercontent Google (memangkas waktu redirect unduhan)
+            linkDirectDownload = `https://drive.usercontent.google.com/u/0/uc?id=${fileId}&export=download`;
+          }
+
           return {
             kelas: cols[0],
             nama: namaBersih,
-            linkLihat: cols[2],
-            linkDownload: cols[3],
+            linkLihat: linkPreview,
+            linkDownload: linkDirectDownload,
             nisn: cols[4] || ""
           };
         }).filter(Boolean);
 
-        // Aktifkan kolom pencarian
         const input = document.getElementById('inputCari');
         input.disabled = false;
         input.placeholder = "Ketik Nama Lengkap atau NISN...";
@@ -94,6 +155,8 @@
         return;
       }
 
+      const autoBuka = hasil.length === 1;
+
       container.innerHTML = hasil.map((item, index) => `
         <div class="card card-hasil p-3 mb-3">
           <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
@@ -102,23 +165,66 @@
               <h6 class="fw-bold mb-0">${item.nama}</h6>
             </div>
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-primary btn-sm" onclick="togglePreview('frame-${index}', '${item.linkLihat}')">Lihat PDF</button>
-              <a href="${item.linkDownload}" target="_blank" class="btn btn-success btn-sm">Unduh PDF</a>
+              <button id="btn-prev-${index}" class="btn btn-outline-primary btn-sm" onclick="togglePreview(${index}, '${item.linkLihat}')">
+                ${autoBuka ? 'Tutup Pratinjau' : 'Pratinjau PDF'}
+              </button>
+              <button class="btn btn-success btn-sm" onclick="unduhCepat(this, '${item.linkDownload}')">Unduh PDF</button>
             </div>
           </div>
-          <iframe id="frame-${index}" class="iframe-preview mt-3"></iframe>
+
+          <div id="wrap-${index}" class="preview-wrapper" style="display: ${autoBuka ? 'block' : 'none'};">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <small class="text-muted fw-semibold">Pratinjau Dokumen Sertifikat ABM</small>
+              <a href="${item.linkLihat}" target="_blank" class="btn btn-link btn-sm p-0 text-decoration-none">↗ Layar Penuh</a>
+            </div>
+            <div class="iframe-container">
+              <div class="iframe-loader">
+                <div class="spinner-border spinner-border-sm text-primary mb-1" role="status"></div>
+                <div style="font-size: 13px;">Memuat pratinjau PDF...</div>
+              </div>
+              <iframe id="frame-${index}" class="iframe-preview" src="${autoBuka ? item.linkLihat : ''}" allow="autoplay"></iframe>
+            </div>
+          </div>
         </div>
       `).join('');
     }
 
-    function togglePreview(frameId, url) {
-      const frame = document.getElementById(frameId);
-      if (frame.style.display === 'none' || frame.style.display === '') {
-        frame.src = url;
-        frame.style.display = 'block';
+    function togglePreview(index, url) {
+      const wrap = document.getElementById(`wrap-${index}`);
+      const frame = document.getElementById(`frame-${index}`);
+      const btn = document.getElementById(`btn-prev-${index}`);
+
+      if (wrap.style.display === 'none' || wrap.style.display === '') {
+        if (!frame.src || frame.src === window.location.href) {
+          frame.src = url;
+        }
+        wrap.style.display = 'block';
+        btn.innerText = 'Tutup Pratinjau';
       } else {
-        frame.style.display = 'none';
+        wrap.style.display = 'none';
+        btn.innerText = 'Pratinjau PDF';
       }
+    }
+
+    // Mengunduh di latar belakang tanpa membuka tab kosong yang lama berputar
+    function unduhCepat(tombol, url) {
+      const teksAsli = tombol.innerText;
+      tombol.innerText = 'Mengunduh...';
+      tombol.disabled = true;
+
+      const hiddenFrame = document.createElement('iframe');
+      hiddenFrame.style.display = 'none';
+      hiddenFrame.src = url;
+      document.body.appendChild(hiddenFrame);
+
+      setTimeout(() => {
+        tombol.innerText = 'Terkirim ✓';
+        setTimeout(() => {
+          tombol.innerText = teksAsli;
+          tombol.disabled = false;
+          hiddenFrame.remove();
+        }, 2000);
+      }, 1500);
     }
 
     muatDatabase();
