@@ -3,31 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Hasil ABM - SMK Negeri 2 Purbalingga</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { 
-      background-color: #f4f7f6; 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    }
-    .header-box { 
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
-      color: white; 
-      padding: 2rem 1rem; 
-      border-radius: 0 0 20px 20px; 
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    .card-hasil { 
-      border: none; 
-      border-radius: 12px; 
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
-    }
-    .iframe-preview { 
-      width: 100%; 
-      height: 550px; 
-      border: 1px solid #ddd; 
-      border-radius: 8px; 
-      display: none; 
-    }
+    body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .header-box { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2rem 1rem; border-radius: 0 0 20px 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .card-hasil { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .iframe-preview { width: 100%; height: 550px; border: 1px solid #ddd; border-radius: 8px; display: none; }
   </style>
 </head>
 <body>
@@ -41,67 +23,92 @@
     <div class="card card-hasil p-4 mb-4">
       <label for="inputCari" class="form-label fw-semibold">Cari Hasil ABM Anda</label>
       <div class="input-group input-group-lg">
-        <input type="text" id="inputCari" class="form-control" placeholder="Ketik Nama Lengkap..." onkeypress="if(event.key==='Enter') cariData()">
-        <button class="btn btn-primary px-4" onclick="cariData()">Cari</button>
+        <input type="text" id="inputCari" class="form-control" placeholder="Memuat database..." disabled oninput="cariData()">
+        <button id="btnCari" class="btn btn-primary px-4" onclick="cariData()" disabled>Cari</button>
       </div>
-      <div class="form-text mt-2">Masukkan Nama Lengkap Anda untuk melihat dan mengunduh Hasil ABM PDF.</div>
-    </div>
-
-    <div id="loading" class="text-center my-4" style="display:none;">
-      <div class="spinner-border text-primary" role="status"></div>
-      <p class="mt-2 text-muted">Mencari data hasil ABM...</p>
+      <div id="statusInfo" class="form-text mt-2">Sedang menyiapkan data siswa...</div>
     </div>
 
     <div id="areaHasil"></div>
   </div>
 
   <script>
-    function cariData() {
-      const keyword = document.getElementById('inputCari').value;
-      if (keyword.trim().length < 3) {
-        alert('Masukkan Nama Lengkap Anda.');
-        return;
+    // TEMPELKAN LINK CSV DARI GOOGLE SHEETS DI SINI
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRppRz_aJizJooLHc4NzIkP-QYq5PFgjefLG8M_1PRu8aauZGbMdUQ4iI4Yvlnh6FYWGSJscFTmcrfK/pub?gid=0&single=true&output=csv";
+    let databaseSiswa = [];
+
+    // Memuat seluruh database 1 kali saat halaman dibuka (kurang dari 1 detik)
+    async function muatDatabase() {
+      try {
+        const res = await fetch(CSV_URL);
+        const text = await res.text();
+        const baris = text.split(/\r?\n/).slice(1); // Lewati baris header
+
+        databaseSiswa = baris.map(row => {
+          // Memecah kolom CSV dengan aman
+          const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
+          if (cols.length < 4 || !cols[1]) return null;
+
+          const namaBersih = cols[1]
+            .replace(/\.pdf$/i, '')
+            .replace(/^.*?Hasil_ABM_/i, '')
+            .replace(/_/g, ' ')
+            .trim();
+
+          return {
+            kelas: cols[0],
+            nama: namaBersih,
+            linkLihat: cols[2],
+            linkDownload: cols[3],
+            nisn: cols[4] || ""
+          };
+        }).filter(Boolean);
+
+        // Aktifkan kolom pencarian
+        const input = document.getElementById('inputCari');
+        input.disabled = false;
+        input.placeholder = "Ketik Nama Lengkap atau NISN...";
+        document.getElementById('btnCari').disabled = false;
+        document.getElementById('statusInfo').innerText = `Siap! ${databaseSiswa.length} data hasil ABM berhasil dimuat.`;
+      } catch (err) {
+        document.getElementById('statusInfo').innerHTML = `<span class="text-danger">Gagal memuat database. Pastikan link CSV sudah benar dan dipublikasikan.</span>`;
       }
-
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('areaHasil').innerHTML = '';
-
-      google.script.run
-        .withSuccessHandler(tampilkanHasil)
-        .withFailureHandler(function(err) {
-          document.getElementById('loading').style.display = 'none';
-          alert('Terjadi kesalahan: ' + err.message);
-        })
-        .cariHasilSiswa(keyword);
     }
 
-    function tampilkanHasil(data) {
-      document.getElementById('loading').style.display = 'none';
+    function cariData() {
+      const keyword = document.getElementById('inputCari').value.toLowerCase().trim();
       const container = document.getElementById('areaHasil');
 
-      if (!data || data.length === 0) {
-        container.innerHTML = '<div class="alert alert-warning text-center">Data tidak ditemukan. Pastikan ejaan nama lengkap sudah benar.</div>';
+      if (keyword.length < 3) {
+        container.innerHTML = '';
         return;
       }
 
-      data.forEach((item, index) => {
-        const html = `
-          <div class="card card-hasil p-3 mb-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-              <div>
-                <span class="badge bg-info text-dark mb-1">${item.kelas}</span>
-                <h6 class="fw-bold mb-0">${item.nama}</h6>
-              </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-outline-primary btn-sm" onclick="togglePreview('frame-${index}', '${item.linkLihat}')">Lihat PDF</button>
-                <a href="${item.linkDownload}" target="_blank" class="btn btn-success btn-sm">Unduh PDF</a>
-              </div>
+      const hasil = databaseSiswa.filter(item => 
+        item.nama.toLowerCase().includes(keyword) || 
+        (item.nisn !== "" && item.nisn === keyword)
+      );
+
+      if (hasil.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning text-center">Data tidak ditemukan. Pastikan ejaan nama atau NISN sudah benar.</div>';
+        return;
+      }
+
+      container.innerHTML = hasil.map((item, index) => `
+        <div class="card card-hasil p-3 mb-3">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <div>
+              <span class="badge bg-info text-dark mb-1">${item.kelas}</span>
+              <h6 class="fw-bold mb-0">${item.nama}</h6>
             </div>
-            <iframe id="frame-${index}" class="iframe-preview mt-3"></iframe>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-primary btn-sm" onclick="togglePreview('frame-${index}', '${item.linkLihat}')">Lihat PDF</button>
+              <a href="${item.linkDownload}" target="_blank" class="btn btn-success btn-sm">Unduh PDF</a>
+            </div>
           </div>
-        `;
-        container.innerHTML += html;
-      });
+          <iframe id="frame-${index}" class="iframe-preview mt-3"></iframe>
+        </div>
+      `).join('');
     }
 
     function togglePreview(frameId, url) {
@@ -113,6 +120,8 @@
         frame.style.display = 'none';
       }
     }
+
+    muatDatabase();
   </script>
 </body>
 </html>
